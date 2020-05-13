@@ -91,7 +91,7 @@ Class Main extends PluginBase implements Listener {
             //中身を追加する
             $inventory->addItem($itemContent);
             //メッセージ送信
-            $player->sendMessage("§a ?? {$senderName}様からのプレゼントです！");
+            $player->sendMessage("§a >> {$senderName}様からのプレゼントです！");
             //サウンド再生
             $pk = new PlaySoundPacket();
             $pk->soundName = 'random.levelup';
