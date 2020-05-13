@@ -2,6 +2,7 @@
 
 namespace xtakumatutix\wrapping;
 
+use pocketmine\nbt\tag\IntTag;
 use pocketmine\plugin\PluginBase;
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
@@ -15,13 +16,13 @@ use pocketmine\network\mcpe\protocol\PlaySoundPacket;
 
 Class Main extends PluginBase implements Listener {
 
-    public function onEnable() 
+    public function onEnable()
     {
         $this->getLogger()->notice("読み込み完了_ver.1.0.0");
         $this->getServer()->getPluginManager()->registerEvents($this, $this);
     }
 
-    public function onCommand(CommandSender $sender, Command $command, string $label, array $args): bool 
+    public function onCommand(CommandSender $sender, Command $command, string $label, array $args): bool
     {
         if ($sender instanceof Player) {
             if($sender->getInventory()->all(Item::get(Item::PAPER))) {
@@ -38,17 +39,23 @@ Class Main extends PluginBase implements Listener {
                 $item = Item::get(378, 0);
                 $item->setLore(["中身はなにかな...?"]);
                 $item->setCustomName("{$name}様より");
-                $tag = $item->getNamedTag() ?? new CompoundTag('', []);
-                $tag->setTag(new StringTag("wrapping","1"), true);
-                $tag->setTag(new StringTag("wrapping1","{$id}"), true);
-                $tag->setTag(new StringTag("wrapping2","{$damage}"), true);
-                $tag->setTag(new StringTag("wrapping3","{$count}"), true);
-                $tag->setTag(new StringTag("wrapping4","{$name}"), true);
-                $item->setNamedTag($tag);
+
+                //アイテムに付与するタグを生成
+                $pluginName = $this->getName();//プラグイン名を取得
+                $compoundTag = new CompoundTag($pluginName, [
+                    new IntTag("item-id", $id),//アイテムID
+                    new IntTag("item-damage", $damage),//アイテムダメージ
+                    new IntTag("item-count", $count),//アイテム個数
+                    new StringTag("sender-name", $name),//送り主名
+                ]);
+
+                //アイテムにNBTを設定する
+                $item->setNamedTag($compoundTag);
+
                 $sender->getInventory()->addItem($item);
                 $sender->sendMessage("§a >> ラッピングしました！！");
 
-                return false;
+                return true;
             }else{
                 $sender->sendMessage("§c >> 紙がありません");
                 return true;
@@ -62,28 +69,38 @@ Class Main extends PluginBase implements Listener {
     public function tap(PlayerInteractEvent $event)
     {
         $player = $event->getPlayer();
-        $item = $player->getInventory()->getItemInHand();
-        $itemid = $item->getID();
-        if(378 == $itemid){
-            $tag = $item->getNamedTag();
-                if(isset($tag->getTag("wrapping"))){
-                $id = $tag->getTag('wrapping1')->getValue();
-                $damage = $tag->getTag('wrapping2')->getValue();
-                $count = $tag->getTag('wrapping3')->getValue();
-                $name = $tag->getTag('wrapping4')->getValue();
-                $player->getInventory()->removeItem(Item::get(378,0,1));
-                $player->getInventory()->addItem(Item::get($id,$damage,$count));
-                $player->sendMessage("§a >> {$name}様からのプレゼントです！");
-
-                $pk = new PlaySoundPacket();
-                $pk->soundName = 'random.levelup';
-                $pk->x = $player->x;
-                $pk->y = $player->y;
-                $pk->z = $player->z;
-                $pk->volume = 1;
-                $pk->pitch = 1;
-                $player->dataPacket($pk);
+        $inventory = $player->getInventory();//インベントリを代入
+        $handItem = $inventory->getItemInHand();//手持ちアイテムを代入
+        if($handItem->getId() === 378){
+            $pluginName = $this->getName();//プラグイン名を取得
+            $compoundTag = $handItem->getNamedTag()->getCompoundTag($pluginName);//CompoundTagを取得
+            if($compoundTag === null){
+                //CompoundTagが設定されていなかった場合
+                return;//ここで処理を終了
             }
+            //中身のItemオブジェクトを生成
+            $itemContent = new Item(
+                $compoundTag->getInt("item-id"),//アイテムID
+                $compoundTag->getInt("item-damage"),//アイテムダメージ
+                $compoundTag->getInt("item-count")//アイテム個数
+            );
+            //送り主を取得
+            $senderName = $compoundTag->getString("sender-name");
+            //ラッピングのアイテムを消す
+            $inventory->removeItem(Item::get(378));
+            //中身を追加する
+            $inventory->addItem($itemContent);
+            //メッセージ送信
+            $player->sendMessage("§a ?? {$senderName}様からのプレゼントです！");
+            //サウンド再生
+            $pk = new PlaySoundPacket();
+            $pk->soundName = 'random.levelup';
+            $pk->x = $player->x;
+            $pk->y = $player->y;
+            $pk->z = $player->z;
+            $pk->volume = 1;
+            $pk->pitch = 1;
+            $player->dataPacket($pk);
         }
     }
 }
